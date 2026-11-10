@@ -4,7 +4,7 @@ Scrub through a file's git history with a slider and watch the diff update as yo
 
 ![History Slider opening on lib/response.js with Ctrl+Alt+H, then dragging the old handle back through its history while the diff updates and a commit card follows the handle; dragging past the oldest loaded commit loads 50 more](media/demo/scrub-history.gif)
 
-<sub>The recordings on this page were made in VS Code on the history of [Express](https://github.com/expressjs/express) (MIT License).</sub>
+<sub>The recordings of a file's history on this page were made in VS Code on the history of [Express](https://github.com/expressjs/express) (MIT License).</sub>
 
 Most history tools give you a list of commits. To see how a file changed, you open a commit, find the file, pick "compare with previous" or "compare with working copy", and repeat for the next commit. History Slider puts the file's whole history on one timeline above a diff and gives you two handles to drag.
 
@@ -71,10 +71,16 @@ Clicking the **OLD** or **NEW** label under the timeline focuses that handle.
 
 **History Slider: Show Branch History Slider** (the branch button in the Source Control view's title bar, or **Ctrl+Alt+Shift+H** / **⌃⇧⌘H**) puts a branch on the same kind of timeline. Instead of one file's diff, it shows every file the branch changed.
 
+![The branch view on restructure-docs, which is stacked on restructure: clicking the main button at the left end of the timeline moves the base up to where restructure was branched from main, and the list fills with renamed files; checking Content changes only leaves the 6 files whose lines changed; clicking diffView.ts shows its diff beside the list and marks the two commits that changed it; dragging the new handle back updates the list and the diff together; R resets, typing in the filter narrows the list, and hovering a commit shows its card](media/demo/branch-history.gif)
+
+<sub>The branch view's pictures show its panel on a copy of this repository, with a stacked pair of branches that move the code into packages.</sub>
+
 - **The timeline runs from where the branch was branched to its newest commit.** The base sits at the left end; commits after it follow the branch's first-parent line, so merging main in is one step. On the checked-out branch, **Staged** and **Working copy** stops (untracked files included) come after the newest commit when there are any.
 - **Go up the tree for stacked branches.** The title shows the bases it found, like `main › feature-a › feature-b`. Click the button at the left end of the timeline (it names the next branch up), press `U`, or click a branch in the title to start from where *that* branch was branched instead; `Shift+U` goes back down. The handles can't be put on just any two commits: they stay on the line between the base and the branch.
 - **Pick another branch** with the branch name in the title (or `B`). Local and remote branches both work; everything resets to the new branch, from its nearest base.
 - The handles, the commit card, double-click to see one commit's change and the keyboard work as they do for a file.
+
+![The title reads main › restructure › restructure-docs with main highlighted as the base; the timeline marks where restructure was branched, and the list shows 25 files, most of them renamed with nothing else changed](media/demo/branch-up-the-tree.png)
 
 ### The file list
 
@@ -84,11 +90,15 @@ Every file that changed between the two handles, as a tree or a flat list, with 
 - **Filter by name** (`/`): terms separated by spaces must all match the path (or a renamed file's old path). Plain text matches anywhere, globs like `*.ts`, `src/**/*.test.ts` and `*.{ts,tsx}` work, `a,b` matches either, and `!term` leaves matches out: `src/ !*.lock !**/generated/**`. Turn on the `.*` button for a regular expression, `Aa` to match case.
 - Sort by name, lines changed or kind, and collapse folders.
 
+![Content changes only is checked, so the Renamed, Whitespace only and Mode only chips are crossed out and 6 of 25 files are left; diffView.ts is open beside the list, and the two commits that changed it are highlighted on the timeline](media/demo/branch-content-changes.png)
+
 ### The file beside it
 
 Click a file (or move through them with the arrow keys, or `,` and `.`) to see its diff next to the list. It's **locked to the slider**: drag a handle and it updates along with the list, following the file through renames. The commits that changed it light up on the timeline, and `{` / `}` jump to the previous or next of them.
 
 To look at a file on its own, use **Open in a new History Slider** (on the row, in the pane, `H`, Shift+Enter, or double-click). It opens the file's usual History Slider beside the branch view, starting on the same two points (the newest commits at or before each handle that changed the file), and the two panels don't affect each other after that. **Open in the VS Code diff editor** (`O`) is there too.
+
+![The new handle is on the working copy: the list includes an untracked notes.txt, and historyPanel.ts shows the line just added to it on disk](media/demo/branch-working-copy.png)
 
 ## Settings
 
