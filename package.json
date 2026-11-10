@@ -27,7 +27,8 @@
   ],
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onWebviewPanel:historySlider.history"
+    "onWebviewPanel:historySlider.history",
+    "onWebviewPanel:historySlider.branch"
   ],
   "contributes": {
     "commands": [
@@ -36,6 +37,12 @@
         "title": "Show File History Slider",
         "category": "History Slider",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "historySlider.showBranchHistory",
+        "title": "Show Branch History Slider",
+        "category": "History Slider",
+        "icon": "$(git-branch)"
       }
     ],
     "menus": {
@@ -43,6 +50,10 @@
         {
           "command": "historySlider.showHistory",
           "when": "resourceScheme == file || activeEditor"
+        },
+        {
+          "command": "historySlider.showBranchHistory",
+          "when": "workspaceFolderCount > 0 || activeEditor"
         }
       ],
       "editor/title": [
@@ -79,6 +90,20 @@
           "when": "timelineItem =~ /git:file:commit\\b/",
           "group": "1_actions@90"
         }
+      ],
+      "scm/title": [
+        {
+          "command": "historySlider.showBranchHistory",
+          "when": "scmProvider == git",
+          "group": "navigation@90"
+        }
+      ],
+      "scm/sourceControl": [
+        {
+          "command": "historySlider.showBranchHistory",
+          "when": "scmProvider == git",
+          "group": "navigation@90"
+        }
       ]
     },
     "keybindings": [
@@ -87,6 +112,11 @@
         "key": "ctrl+alt+h",
         "mac": "ctrl+cmd+h",
         "when": "editorTextFocus || activeEditor"
+      },
+      {
+        "command": "historySlider.showBranchHistory",
+        "key": "ctrl+alt+shift+h",
+        "mac": "ctrl+shift+cmd+h"
       }
     ],
     "configuration": {

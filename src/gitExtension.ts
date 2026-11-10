@@ -67,3 +67,8 @@ export async function onRepositoryChange(uri: vscode.Uri, listener: () => void):
   }
   return new vscode.Disposable(() => disposables.forEach((d) => d.dispose()));
 }
+
+/** Roots of the repositories the git extension has open. */
+export async function repositoryRoots(): Promise<vscode.Uri[]> {
+  return (await api())?.repositories.map((r) => r.rootUri) ?? [];
+}

@@ -118,6 +118,15 @@ export class DiffView {
     if (model) replaceText(model, text);
   }
 
+  /** Drops every cached model, e.g. before showing a different file. */
+  clear(): void {
+    this.pending = undefined;
+    this.afterDiff = undefined;
+    this.editor.setModel({ original: this.empty[0], modified: this.empty[1] });
+    for (const m of this.models.values()) m.dispose();
+    this.models.clear();
+  }
+
   /** Drops cached models for revisions whose content can change. */
   forget(id: string): void {
     const model = this.models.get(id);

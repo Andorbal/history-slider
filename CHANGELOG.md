@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Branch History Slider**: a slider over a whole branch, from where it was branched to its newest commit (and the working copy), showing every file that changed between the two handles. Run **History Slider: Show Branch History Slider**, use the branch button in the Source Control view, or press `Ctrl+Alt+Shift+H` (`⌃⇧⌘H` on macOS).
+  - Go up the tree for stacked branches: start the slider from where the parent branch was branched instead, and back.
+  - Filter the files by kind of change (added, modified, deleted, pure renames, renamed and edited, copied, whitespace only, mode only), with **Content changes only** to hide everything that leaves the lines as they were, and by name with globs, exclusions or a regular expression.
+  - Click a file to see its diff beside the list, locked to the slider and followed through renames, with the commits that changed it marked on the timeline. Or open it in its own History Slider, starting on the same commits.
+- A file's History Slider can show another branch's history, without a working copy. The branch view uses this when you open a file from a branch that isn't checked out.
+
 ## 0.3.0
 
 - Published on the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=AndrewBenz.history-slider), so VS Code installs and updates it for you.

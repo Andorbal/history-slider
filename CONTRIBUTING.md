@@ -7,8 +7,11 @@
 | `src/extension.ts` | Activation, the `historySlider.showHistory` command, working out which file (and commit) it was invoked on |
 | `src/historyPanel.ts` | One webview panel per file: loads history, serves file contents, watches the file and repository |
 | `src/fileHistory.ts`, `src/git.ts` | Git access (`git log --follow`, a long-lived `git cat-file --batch`). No `vscode` imports, so they are tested against real repositories |
+| `src/branchPanel.ts` | One webview panel per repository for the branch view: picks the branch, opens files in the diff editor or their own History Slider, refreshes on repository changes |
+| `src/branchHistory.ts`, `src/branchGit.ts` | The branch view's git access, also without `vscode`: where a branch was branched (and where that branch was, for stacked branches), the commits along it, what changed in the whole repository between two points and how each file changed (pure rename, whitespace only, mode only...). Diffs against the working tree use a throwaway copy of the index with untracked files added as intent-to-add, so they count and pair up as renames without touching the real index |
+| `src/shared/branchProtocol.ts` | Messages between the extension and the branch view |
 | `src/shared/protocol.ts` | Messages between the extension and the webview |
-| `webview/` | The panel UI: `slider.ts` (timeline and handles), `sliderModel.ts` (pure layout/selection logic), `diffView.ts` (Monaco diff editor), `card.ts` (commit popup), `app.ts` (wiring) |
+| `webview/` | The panel UI: `slider.ts` (timeline and handles), `sliderModel.ts` (pure layout/selection logic), `diffView.ts` (Monaco diff editor), `card.ts` (commit popup), `app.ts` (wiring). The branch view adds `branchApp.ts` (its wiring), `fileList.ts` (the virtualized file tree) and `fileFilter.ts` (pure filtering, globs and tree building); `main.ts` starts one or the other from the page's `data-view` |
 | `test/demo/` | Records the animations in the README (`npm run demos`) |
 | `esbuild.mjs` | Bundles the extension, the webview (with Monaco) and Monaco's diff worker into `dist/`, stamping the extension and webview with the same build id (`src/shared/build.ts`) so a panel notices when VS Code is still running another build |
 
@@ -25,12 +28,12 @@ Press **F5** in VS Code ("Run Extension") to start an Extension Development Host
 
 ```sh
 npm run typecheck
-npm test             # unit tests: git layer against temporary repos, slider logic, formatting
+npm test             # unit tests: git layer against temporary repos, slider logic, file filters, formatting
 npm run test:ui      # the webview in headless Chromium with a mock extension host
 npm run check        # all of the above
 ```
 
-The UI tests (`test/ui`) serve the built webview the way VS Code does: the page and its assets on different origins, under the same Content-Security-Policy the extension sets. They fail on any console error or CSP violation, and they check that Monaco's diff worker really starts.
+The UI tests (`test/ui`) serve the built webview the way VS Code does: the page and its assets on different origins, under the same Content-Security-Policy the extension sets. They fail on any console error or CSP violation, and they check that Monaco's diff worker really starts. The branch view's tests (`branch.spec.ts`) run against `mockBranchHost.js`, which replays the pretend repository in `branchFixture.ts`: a stack of three branches with a big rename, edits, whitespace and mode changes.
 
 ### End-to-end tests in VS Code
 

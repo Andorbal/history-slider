@@ -7,6 +7,8 @@ export interface WebviewHtmlOptions {
   nonce: string;
   /** Extra markup injected before the main script (tests use it for a mock host). */
   beforeScript?: string;
+  /** Which panel to show: a file's history (the default) or a branch's. */
+  view?: 'file' | 'branch';
 }
 
 export function webviewHtml(o: WebviewHtmlOptions): string {
@@ -30,7 +32,7 @@ export function webviewHtml(o: WebviewHtmlOptions): string {
 <title>History Slider</title>
 </head>
 <body>
-<div id="app" data-worker="${o.asset('editor.worker.js')}"></div>
+<div id="app" data-view="${o.view ?? 'file'}" data-worker="${o.asset('editor.worker.js')}"></div>
 ${o.beforeScript ?? ''}
 <script nonce="${o.nonce}" src="${o.asset('main.js')}"></script>
 </body>

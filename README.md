@@ -67,11 +67,34 @@ When the slider opens, one handle sits on the **latest commit** and the other on
 
 Clicking the **OLD** or **NEW** label under the timeline focuses that handle.
 
+## A whole branch
+
+**History Slider: Show Branch History Slider** (the branch button in the Source Control view's title bar, or **Ctrl+Alt+Shift+H** / **⌃⇧⌘H**) puts a branch on the same kind of timeline. Instead of one file's diff, it shows every file the branch changed.
+
+- **The timeline runs from where the branch was branched to its newest commit.** The base sits at the left end; commits after it follow the branch's first-parent line, so merging main in is one step. On the checked-out branch, **Staged** and **Working copy** stops (untracked files included) come after the newest commit when there are any.
+- **Go up the tree for stacked branches.** The title shows the bases it found, like `main › feature-a › feature-b`. Click the button at the left end of the timeline (it names the next branch up), press `U`, or click a branch in the title to start from where *that* branch was branched instead; `Shift+U` goes back down. The handles can't be put on just any two commits: they stay on the line between the base and the branch.
+- **Pick another branch** with the branch name in the title (or `B`). Local and remote branches both work; everything resets to the new branch, from its nearest base.
+- The handles, the commit card, double-click to see one commit's change and the keyboard work as they do for a file.
+
+### The file list
+
+Every file that changed between the two handles, as a tree or a flat list, with git's status letter, the old name of anything renamed, and line counts.
+
+- **Filter by kind of change.** Each file is one of **Added**, **Modified**, **Deleted**, **Renamed** (moved, content unchanged), **Renamed + edited**, **Copied**, **Whitespace only** (whitespace or line endings) or **Mode only** (like `chmod +x`). Click a chip to hide or show that kind; Alt+click shows only that kind. **Content changes only** hides pure renames, whitespace-only and mode-only changes in one go, leaving just the files whose lines actually changed. The kinds you hide are remembered.
+- **Filter by name** (`/`): terms separated by spaces must all match the path (or a renamed file's old path). Plain text matches anywhere, globs like `*.ts`, `src/**/*.test.ts` and `*.{ts,tsx}` work, `a,b` matches either, and `!term` leaves matches out: `src/ !*.lock !**/generated/**`. Turn on the `.*` button for a regular expression, `Aa` to match case.
+- Sort by name, lines changed or kind, and collapse folders.
+
+### The file beside it
+
+Click a file (or move through them with the arrow keys, or `,` and `.`) to see its diff next to the list. It's **locked to the slider**: drag a handle and it updates along with the list, following the file through renames. The commits that changed it light up on the timeline, and `{` / `}` jump to the previous or next of them.
+
+To look at a file on its own, use **Open in a new History Slider** (on the row, in the pane, `H`, Shift+Enter, or double-click). It opens the file's usual History Slider beside the branch view, starting on the same two points (the newest commits at or before each handle that changed the file), and the two panels don't affect each other after that. **Open in the VS Code diff editor** (`O`) is there too.
+
 ## Settings
 
 | Setting | Default | |
 | --- | --- | --- |
-| `historySlider.pageSize` | `50` | Commits loaded at a time |
+| `historySlider.pageSize` | `50` | Commits loaded at a time (twice that, at least 100, in the branch view) |
 | `historySlider.followRenames` | `true` | Follow history across renames (`git log --follow`) |
 | `historySlider.firstParentOnly` | `false` | Only show first-parent commits, so each merged branch is one step |
 | `historySlider.showStaged` | `true` | Add a **Staged** stop when the file has staged changes |
@@ -94,6 +117,8 @@ Clicking the **OLD** or **NEW** label under the timeline focuses that handle.
 - Syntax highlighting comes from the Monaco editor's built-in grammars. It follows your theme's editor and diff colors, but token colors can differ slightly from your editor's.
 - Binary files, and revisions over `historySlider.maxFileSizeMB`, show a message instead of a diff.
 - Merge commits are compared against their first parent.
+- The branch view finds a branch's base from the other branches (local and remote) that share its history. When two branches have both moved on since they split, git can't tell which one was branched from the other; History Slider uses the branch's reflog (where it pointed when it was created) to tell, so a branch stacked on yours isn't mistaken for its base. If the reflog has expired or the branch was rebased, a wrong guess shows up as an extra level in the title, which you can step past. The repository's default branch (what `origin/HEAD` points at, or `main`/`master`) has no base and shows its history.
+- In the branch view, the working copy is read from disk, so unsaved edits show up once they are saved.
 
 ## Installing
 

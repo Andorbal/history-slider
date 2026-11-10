@@ -14,6 +14,11 @@ export interface FileHistoryOptions {
   firstParent: boolean;
   showStaged: boolean;
   maxBytes: number;
+  /**
+   * Show history from this ref (e.g. refs/heads/feature) instead of HEAD. Such a
+   * history has no staged stop, and the caller leaves out the working copy.
+   */
+  rev?: string;
 }
 
 export class FileHistory {
@@ -32,7 +37,7 @@ export class FileHistory {
   async load(count = this.options.pageSize): Promise<void> {
     const [page, staged, head] = await Promise.all([
       getHistory(this.options.git, this.query(0, Math.max(count, this.options.pageSize))),
-      this.options.showStaged ? getStaged(this.options.git, this.options.root, this.options.relPath) : undefined,
+      this.showStaged() ? getStaged(this.options.git, this.options.root, this.options.relPath) : undefined,
       this.readHead(),
     ]);
     this.commits = page.stops;
@@ -58,7 +63,7 @@ export class FileHistory {
   async signature(): Promise<string> {
     const [head, staged] = await Promise.all([
       this.readHead(),
-      this.options.showStaged
+      this.showStaged()
         ? getStaged(this.options.git, this.options.root, this.options.relPath).catch(() => undefined)
         : undefined,
     ]);
@@ -118,8 +123,13 @@ export class FileHistory {
     this.batch.dispose();
   }
 
+  private showStaged(): boolean {
+    return this.options.showStaged && !this.options.rev;
+  }
+
   private query(skip: number, limit: number) {
     return {
+      rev: this.options.rev,
       root: this.options.root,
       relPath: this.options.relPath,
       skip,
@@ -131,7 +141,7 @@ export class FileHistory {
 
   private async readHead(): Promise<string | undefined> {
     try {
-      return (await runGit(this.options.git, ['rev-parse', '-q', '--verify', 'HEAD'], this.options.root))
+      return (await runGit(this.options.git, ['rev-parse', '-q', '--verify', this.options.rev ?? 'HEAD'], this.options.root))
         .toString()
         .trim();
     } catch {

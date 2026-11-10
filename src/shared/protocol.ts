@@ -45,6 +45,12 @@ export interface Stop {
    * shows: a pure rename, a mode change, or line endings only.
    */
   noVisibleChange?: boolean;
+  /** Branch view: how many files the commit changed (vs. its first parent). */
+  fileCount?: number;
+  /** Branch view: how many of those files were added, modified, deleted, renamed... by git status letter. */
+  statusCounts?: Partial<Record<string, number>>;
+  /** Branch view: branches that forked off the line at this commit (it is their merge base). */
+  forkOf?: string[];
 }
 
 export interface DiffOptions {
@@ -80,6 +86,10 @@ export interface InitPayload {
   revealLine?: number;
   /** Set when history could not be read; the panel shows it instead of a slider. */
   error?: string;
+  /** History starts at this ref rather than HEAD (and has no working copy). */
+  rev?: string;
+  /** What to call `rev`, e.g. the branch name. */
+  revLabel?: string;
 }
 
 export interface ContentResult {
@@ -119,4 +129,6 @@ export type WebviewMessage =
 export interface PanelState {
   resource: string;
   selection?: [string, string];
+  rev?: string;
+  revLabel?: string;
 }

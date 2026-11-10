@@ -1,22 +1,38 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
+import { repoRoot } from './branchGit';
+import { BRANCH_VIEW_TYPE, BranchPanel } from './branchPanel';
+import { gitPath, repositoryRoots } from './gitExtension';
 import { HistoryPanel, VIEW_TYPE, type OpenOptions } from './historyPanel';
 import { REVISION_SCHEME, RevisionContentProvider } from './revisionProvider';
+import type { BranchPanelState } from './shared/branchProtocol';
 import type { PanelState } from './shared/protocol';
 
 export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('historySlider.showHistory', (...args: unknown[]) => showHistory(context, args)),
+    vscode.commands.registerCommand('historySlider.showBranchHistory', (...args: unknown[]) => showBranchHistory(context, args)),
     vscode.workspace.registerTextDocumentContentProvider(REVISION_SCHEME, new RevisionContentProvider()),
     vscode.window.registerWebviewPanelSerializer(VIEW_TYPE, {
       async deserializeWebviewPanel(panel: vscode.WebviewPanel, state: PanelState | undefined) {
         HistoryPanel.revive(panel, context.extensionUri, state);
       },
     }),
+    vscode.window.registerWebviewPanelSerializer(BRANCH_VIEW_TYPE, {
+      async deserializeWebviewPanel(panel: vscode.WebviewPanel, state: BranchPanelState | undefined) {
+        BranchPanel.revive(panel, context, state);
+      },
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('historySlider')) return;
       const historyKeys = ['pageSize', 'followRenames', 'firstParentOnly', 'showStaged', 'maxFileSizeMB'];
-      if (historyKeys.some((k) => e.affectsConfiguration(`historySlider.${k}`))) HistoryPanel.reloadAll();
-      else HistoryPanel.broadcastOptions();
+      if (historyKeys.some((k) => e.affectsConfiguration(`historySlider.${k}`))) {
+        HistoryPanel.reloadAll();
+        BranchPanel.reloadAll();
+      } else {
+        HistoryPanel.broadcastOptions();
+        BranchPanel.broadcastOptions();
+      }
     }),
   );
 }
@@ -73,4 +89,52 @@ function showHistory(context: vscode.ExtensionContext, args: unknown[]): void {
     options.line = editor.selection.active.line + 1;
   }
   HistoryPanel.show(context.extensionUri, uri, options);
+}
+
+/**
+ * Works out which repository the branch command refers to: the Source Control
+ * repository it was invoked on, the file it was invoked on, the active
+ * editor's file, the only open repository, or one the user picks.
+ */
+async function resolveRepository(args: unknown[]): Promise<string | undefined> {
+  const [first] = args;
+  const git = await gitPath();
+  const rootOf = (uri: vscode.Uri, isFile: boolean) => repoRoot(git, isFile ? path.dirname(uri.fsPath) : uri.fsPath);
+  const scm = first as { rootUri?: unknown } | undefined;
+  if (scm && isUri(scm.rootUri)) return rootOf(scm.rootUri, false);
+  if (isUri(first) && first.scheme === 'file') return rootOf(first, true);
+  const editor = vscode.window.activeTextEditor?.document.uri;
+  if (editor?.scheme === 'file') {
+    try {
+      return await rootOf(editor, true);
+    } catch {
+      // Not in a repository; look at the open ones instead.
+    }
+  }
+  const roots = await repositoryRoots();
+  if (roots.length === 1) return rootOf(roots[0], false);
+  if (roots.length > 1) {
+    const picked = await vscode.window.showQuickPick(
+      roots.map((r) => ({ label: path.basename(r.fsPath), description: r.fsPath, uri: r })),
+      { title: 'Show the branch history of which repository?' },
+    );
+    return picked ? rootOf(picked.uri, false) : undefined;
+  }
+  const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+  return folder?.scheme === 'file' ? rootOf(folder, false) : undefined;
+}
+
+async function showBranchHistory(context: vscode.ExtensionContext, args: unknown[]): Promise<void> {
+  let root: string | undefined;
+  try {
+    root = await resolveRepository(args);
+  } catch (err) {
+    void vscode.window.showInformationMessage(`History Slider: ${(err as Error).message}`);
+    return;
+  }
+  if (!root) {
+    void vscode.window.showInformationMessage('History Slider: open a folder or file in a git repository first.');
+    return;
+  }
+  BranchPanel.show(context, root);
 }
