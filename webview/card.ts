@@ -10,6 +10,30 @@ export interface CardActions {
 
 export type CardRole = 'old' | 'new' | 'both' | undefined;
 
+export interface CardOptions {
+  /** 'repo' describes commits by what they did to the whole repository (branch view). */
+  mode?: 'file' | 'repo';
+  /** Extra markup for a stop, shown under its details. */
+  extra?(stop: Stop): string;
+}
+
+const STATUS_WORDS: [string, string][] = [
+  ['A', 'added'],
+  ['M', 'modified'],
+  ['D', 'deleted'],
+  ['R', 'renamed'],
+  ['C', 'copied'],
+  ['T', 'type changed'],
+];
+
+/** "12 files · 3 added · 8 modified · 1 renamed" */
+export function fileSummary(stop: Stop): string {
+  if (stop.fileCount === undefined) return '';
+  const parts = STATUS_WORDS.filter(([k]) => stop.statusCounts?.[k]).map(([k, w]) => `${stop.statusCounts![k]!.toLocaleString()} ${w}`);
+  const files = `${stop.fileCount.toLocaleString()} file${stop.fileCount === 1 ? '' : 's'}`;
+  return [files, ...parts].join(' · ');
+}
+
 const BODY_LINES = 8;
 
 /** The popup with commit details that follows the handle being dragged or the stop being hovered. */
@@ -19,7 +43,10 @@ export class Card {
   private hideTimer?: ReturnType<typeof setTimeout>;
   private hovered = false;
 
-  constructor(private readonly actions: CardActions) {
+  constructor(
+    private readonly actions: CardActions,
+    private readonly options: CardOptions = {},
+  ) {
     this.el = document.createElement('div');
     this.el.className = 'card';
     this.el.hidden = true;
@@ -92,6 +119,8 @@ export class Card {
           ? 'The version in the git index, ready to be committed.'
           : stop.missing
             ? 'The file does not exist on disk.'
+            : this.options.mode === 'repo'
+            ? 'The files as they are on disk, including untracked ones. Updates when they are saved.'
             : stop.dirty
               ? 'Includes unsaved changes from the editor. Updates live as you type.'
               : 'The file as it is on disk. Updates live as it changes.';
@@ -113,12 +142,19 @@ export class Card {
         : stop.added !== undefined
           ? `<span class="added">+${stop.added}</span> <span class="deleted">−${stop.deleted}</span>`
           : '';
-    const file = [
+    const repo = this.options.mode === 'repo';
+    const file = (repo
+      ? [
+          stop.forkOf?.length ? `<span class="card-fork"><span class="hsi hsi-git-branch"></span> where this line meets <strong>${escapeHtml(stop.forkOf.join(', '))}</strong></span>` : '',
+          stop.fileCount !== undefined ? `<span>${escapeHtml(fileSummary(stop))}</span>` : '',
+          (stop.parents?.length ?? 0) > 1 ? '<span>merge commit (diff vs. first parent)</span>' : '',
+        ]
+      : [
       stop.status === 'A' ? '<span>file added</span>' : '',
       stop.status === 'D' ? '<span class="deleted">file deleted</span>' : '',
       stop.oldPath ? `<span>renamed from <code>${escapeHtml(stop.oldPath)}</code></span>` : '',
       (stop.parents?.length ?? 0) > 1 ? '<span>merge commit (diff vs. first parent)</span>' : '',
-    ]
+    ])
       .filter(Boolean)
       .join(' · ');
     const committer =
@@ -142,13 +178,14 @@ export class Card {
         ${stats ? `<span class="card-stats">${stats}</span>` : ''}
       </div>
       ${file ? `<div class="card-meta card-file">${file}</div>` : ''}
+      ${this.options.extra?.(stop) ?? ''}
       ${this.actionsHtml(stop)}`;
   }
 
   private actionsHtml(stop: Stop): string {
     const buttons = [
       stop.kind === 'commit' ? '<button data-action="change" title="Compare this commit with the one before it">Show this change</button>' : '',
-      '<button data-action="open" title="Open this version in an editor tab">Open file</button>',
+      this.options.mode === 'repo' ? '' : '<button data-action="open" title="Open this version in an editor tab">Open file</button>',
       stop.kind === 'commit' ? '<button data-action="copy" title="Copy the full commit SHA">Copy SHA</button>' : '',
     ];
     return `<div class="card-actions">${buttons.join('')}</div>`;

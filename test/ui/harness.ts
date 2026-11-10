@@ -4,10 +4,15 @@ import type { AddressInfo } from 'net';
 import * as path from 'path';
 import type { DiffOptions } from '../../src/shared/protocol';
 import { webviewHtml } from '../../src/webviewHtml';
+import { buildBranchFixture } from './branchFixture';
 import { buildFixture, type FixtureOptions } from './fixture';
 import { THEMES } from './themes';
 
 export interface Scenario {
+  /** Show the branch view (with the fixture in branchFixture.ts) instead of a file's history. */
+  view?: 'branch';
+  /** Branch view: milliseconds the host takes to answer a diff. */
+  diffDelay?: number;
   theme?: keyof typeof THEMES;
   fixture?: FixtureOptions;
   /** Makes the host answer init with this error. */
@@ -41,6 +46,7 @@ export async function startHarness() {
   const dist = path.resolve(__dirname, '../../dist/webview');
   const buildId = fs.readFileSync(path.resolve(__dirname, '../../dist/build-id.txt'), 'utf8');
   const mockHost = fs.readFileSync(path.join(__dirname, 'mockHost.js'), 'utf8');
+  const mockBranchHost = fs.readFileSync(path.join(__dirname, 'mockBranchHost.js'), 'utf8');
 
   const assets = http.createServer((req, res) => {
     const file = path.join(dist, decodeURIComponent(new URL(req.url ?? '/', 'http://x').pathname));
@@ -59,14 +65,18 @@ export async function startHarness() {
   const pages = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://x');
     const scenario: Scenario = JSON.parse(url.searchParams.get('s') ?? '{}');
-    const fixture = buildFixture(scenario.fixture);
-    if (scenario.build !== null) fixture.init.build = scenario.build ?? buildId;
+    const branch = scenario.view === 'branch';
+    const fixture = branch ? buildBranchFixture() : buildFixture(scenario.fixture);
+    const build = scenario.build === null ? undefined : (scenario.build ?? buildId);
+    fixture.init.build = build;
+    if ('other' in fixture) fixture.other.build = build;
     const options: Partial<DiffOptions> = fixture.init.options;
     for (const key of scenario.unknownOptions ?? []) delete options[key];
     const theme = THEMES[scenario.theme ?? 'dark'];
     const nonce = 'harnessnonce';
-    const script = `const __FIXTURE__ = ${JSON.stringify(fixture)};\nconst __SCENARIO__ = ${JSON.stringify(scenario)};\n${mockHost}`;
+    const script = `const __FIXTURE__ = ${JSON.stringify(fixture)};\nconst __SCENARIO__ = ${JSON.stringify(scenario)};\n${branch ? mockBranchHost : mockHost}`;
     const html = webviewHtml({
+      view: branch ? 'branch' : 'file',
       cspSource: assetOrigin,
       nonce,
       asset: (name) => `${assetOrigin}/${name}`,

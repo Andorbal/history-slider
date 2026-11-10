@@ -17,7 +17,8 @@ export type InspectMode = 'hover' | 'drag' | 'focus';
 
 export interface SliderEvents {
   select(selection: [string, string], source: 'drag' | 'keyboard' | 'click'): void;
-  loadMore(all: boolean): void;
+  /** `source` says whether the button was clicked or a handle reached the oldest stop. */
+  loadMore(all: boolean, source: 'button' | 'auto'): void;
   /** A stop is hovered, dragged or focused; `stop` is undefined when nothing is. */
   inspect(stop: Stop | undefined, anchorClientX: number, mode: InspectMode): void;
   /** Double-click on a stop. */
@@ -61,6 +62,10 @@ export class Slider {
    */
   private beyondRight = 0;
   private barEls: (HTMLElement | undefined)[] = [];
+  private tickEls: HTMLElement[] = [];
+  /** Stops to point out (e.g. the commits that changed the selected file). */
+  private marks?: ReadonlySet<string>;
+  private moreLabel?: { html: string; title: string };
 
   constructor(private readonly events: SliderEvents) {
     this.el = document.createElement('section');
@@ -106,7 +111,7 @@ export class Slider {
     this.moreEl.addEventListener('click', (e) => {
       if (this.loading || !this.hasMore) return;
       this.loadSource = 'button';
-      this.events.loadMore(e.shiftKey);
+      this.events.loadMore(e.shiftKey, 'button');
     });
     this.handles.forEach((h, i) => {
       h.addEventListener('keydown', (e) => this.onHandleKey(e, i as Handle));
@@ -155,6 +160,18 @@ export class Slider {
     this.selection = [selection[0], selection[1]];
     this.renderSelection();
     if (reveal) this.reveal(this.active);
+  }
+
+  /** Replaces the "‹ Older" button's text, e.g. to name what clicking it extends the range to. */
+  setMoreButton(label: { html: string; title: string } | undefined): void {
+    this.moreLabel = label;
+    this.renderMore();
+  }
+
+  /** Highlights these stops' ticks and dims the other bars; undefined clears it. */
+  setMarks(ids: ReadonlySet<string> | undefined): void {
+    this.marks = ids;
+    this.renderMarks();
   }
 
   getSelection(): [string, string] {
@@ -244,17 +261,21 @@ export class Slider {
           ? ''
           : `background:linear-gradient(to top,var(--hs-added) 0 ${pct}%,var(--hs-deleted) ${pct}% 100%);`;
         barsHtml += `<div class="tl-bar${b.unknown ? ' unknown' : ''}" data-i="${i}" style="left:${x - barWidth / 2}px;width:${barWidth}px;height:${b.height.toFixed(1)}px;${style}"></div>`;
-        if (formatRefs(s.refs).some((r) => r.tag)) {
+        if (s.forkOf?.length) {
+          barsHtml += `<span class="tl-fork hsi hsi-git-branch" style="left:${x}px"></span>`;
+        } else if (formatRefs(s.refs).some((r) => r.tag)) {
           barsHtml += `<span class="tl-tag hsi hsi-tag" style="left:${x}px"></span>`;
         }
       }
-      const cls = s.kind === 'commit' ? (s.missing ? 'tl-tick deleted' : 'tl-tick') : `tl-tick ${s.kind}`;
+      const cls = s.kind === 'commit' ? (s.missing ? 'tl-tick deleted' : s.forkOf?.length ? 'tl-tick fork' : 'tl-tick') : `tl-tick ${s.kind}`;
       ticksHtml += `<div class="${cls}${s.dirty ? ' dirty' : ''}" style="left:${x}px"></div>`;
     });
     this.barsEl.innerHTML = barsHtml;
     this.barEls = [];
     this.barsEl.querySelectorAll<HTMLElement>('.tl-bar').forEach((el) => (this.barEls[Number(el.dataset.i)] = el));
     this.ticksEl.innerHTML = ticksHtml;
+    this.tickEls = [...this.ticksEl.querySelectorAll<HTMLElement>('.tl-tick')];
+    this.renderMarks();
     this.axisEl.innerHTML = axisLabels(this.stops, this.layout)
       .map(
         (l) =>
@@ -273,8 +294,18 @@ export class Slider {
     this.moreEl.disabled = this.loading;
     this.moreEl.innerHTML = this.loading
       ? '<span class="hsi hsi-loading hsi-modifier-spin"></span> Loading'
-      : '<span class="hsi hsi-chevron-left"></span> Older';
-    this.moreEl.title = 'Load older commits (Shift+click loads the entire history)';
+      : `<span class="hsi hsi-chevron-left"></span> ${this.moreLabel?.html ?? 'Older'}`;
+    this.moreEl.title = this.moreLabel?.title ?? 'Load older commits (Shift+click loads the entire history)';
+  }
+
+  private renderMarks(): void {
+    const marks = this.marks;
+    this.el.classList.toggle('has-marks', !!marks);
+    this.stops.forEach((s, i) => {
+      const on = !!marks?.has(s.id);
+      this.tickEls[i]?.classList.toggle('mark', on);
+      this.barEls[i]?.classList.toggle('mark', on);
+    });
   }
 
   private renderSelection(): void {
@@ -420,7 +451,7 @@ export class Slider {
   private maybeLoadMore(): void {
     if (!this.hasMore || this.loading) return;
     this.loadSource = 'auto';
-    this.events.loadMore(false);
+    this.events.loadMore(false, 'auto');
   }
 
   /** While dragging near an edge, keep scrolling the timeline in that direction. */

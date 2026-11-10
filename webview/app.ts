@@ -253,8 +253,8 @@ export class App {
     this.renderNotice(payload.build);
     this.el.fileName.textContent = payload.fileName;
     const dir = payload.relPath.includes('/') ? payload.relPath.slice(0, payload.relPath.lastIndexOf('/')) : '';
-    this.el.fileDir.textContent = [payload.repoName, dir].filter(Boolean).join(' / ');
-    this.el.fileDir.title = payload.relPath;
+    this.el.fileDir.textContent = [payload.repoName, dir].filter(Boolean).join(' / ') + (payload.revLabel ? ` · on ${payload.revLabel}` : '');
+    this.el.fileDir.title = payload.revLabel ? `${payload.relPath}\nHistory of ${payload.revLabel}` : payload.relPath;
 
     if (payload.error) {
       this.setStatus('error', payload.error);
@@ -353,6 +353,11 @@ export class App {
 
   private defaultSelection(): [string, string] {
     const commits = this.stops.filter((s) => s.kind === 'commit');
+    if (!this.stops.some((s) => s.id === WORKING_ID) && commits.length) {
+      // Another branch's history has no working copy: start on the latest commit's change.
+      const n = commits.length;
+      return [commits[Math.max(0, n - 2)].id, commits[n - 1].id];
+    }
     const latest = commits[commits.length - 1] ?? this.stops.find((s) => s.kind === 'staged');
     return [latest?.id ?? WORKING_ID, WORKING_ID];
   }
@@ -372,6 +377,10 @@ export class App {
     this.renderCompare();
     this.updateDiff();
     const state: PanelState = { resource: this.payload?.resource ?? '', selection: this.selection };
+    if (this.payload?.rev) {
+      state.rev = this.payload.rev;
+      state.revLabel = this.payload.revLabel;
+    }
     this.host.setState(state);
     if (notify) {
       clearTimeout(this.selectionTimer);

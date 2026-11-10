@@ -1,13 +1,15 @@
 import './monacoFeatures';
 import 'monaco-editor/languages/definitions/register.all';
+import type { BranchPanelState, BranchWebviewMessage } from '../src/shared/branchProtocol';
 import type { PanelState, WebviewMessage } from '../src/shared/protocol';
 import { App } from './app';
+import { BranchApp } from './branchApp';
 import './styles.css';
 
 interface VsCodeApi {
-  postMessage(message: WebviewMessage): void;
-  setState(state: PanelState): void;
-  getState(): PanelState | undefined;
+  postMessage(message: WebviewMessage | BranchWebviewMessage): void;
+  setState(state: PanelState | BranchPanelState): void;
+  getState(): PanelState | BranchPanelState | undefined;
 }
 
 declare function acquireVsCodeApi(): VsCodeApi;
@@ -34,4 +36,6 @@ window.MonacoEnvironment = {
   },
 };
 
-new App(container, acquireVsCodeApi());
+const vscode = acquireVsCodeApi();
+if (container.dataset.view === 'branch') new BranchApp(container, vscode);
+else new App(container, vscode);

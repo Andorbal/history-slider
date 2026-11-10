@@ -21,13 +21,19 @@ export class GitError extends Error {
 /** Config overrides that keep user settings from changing the output we parse. */
 const SAFE_CONFIG = ['-c', 'log.showSignature=false', '-c', 'core.quotePath=false', '-c', 'color.ui=false'];
 
-export function runGit(git: string, args: string[], cwd: string, input?: string): Promise<Buffer> {
+export function runGit(
+  git: string,
+  args: string[],
+  cwd: string,
+  input?: string,
+  env?: Record<string, string>,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams;
     try {
       child = spawn(git, [...SAFE_CONFIG, ...args], {
         cwd,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
+        env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', ...env },
         windowsHide: true,
       });
     } catch (err) {
@@ -54,8 +60,8 @@ export function runGit(git: string, args: string[], cwd: string, input?: string)
   });
 }
 
-async function runGitText(git: string, args: string[], cwd: string): Promise<string> {
-  return (await runGit(git, args, cwd)).toString('utf8');
+export async function runGitText(git: string, args: string[], cwd: string, input?: string, env?: Record<string, string>): Promise<string> {
+  return (await runGit(git, args, cwd, input, env)).toString('utf8');
 }
 
 function existingDir(p: string): string {
@@ -117,6 +123,8 @@ export interface HistoryQuery {
   limit: number;
   follow: boolean;
   firstParent: boolean;
+  /** Where history starts; HEAD when left out. */
+  rev?: string;
 }
 
 export interface HistoryPage {
@@ -125,9 +133,9 @@ export interface HistoryPage {
   hasMore: boolean;
 }
 
-const FIELD = '\x1f';
-const RECORD = '\x1e';
-const LOG_FORMAT = `${RECORD}%H${FIELD}%P${FIELD}%an${FIELD}%ae${FIELD}%at${FIELD}%cn${FIELD}%ct${FIELD}%D${FIELD}%B`;
+export const FIELD = '\x1f';
+export const RECORD = '\x1e';
+export const LOG_FORMAT = `${RECORD}%H${FIELD}%P${FIELD}%an${FIELD}%ae${FIELD}%at${FIELD}%cn${FIELD}%ct${FIELD}%D${FIELD}%B`;
 
 const diffMergesSupport = new Map<string, boolean>();
 
@@ -156,27 +164,33 @@ function historyArgs(q: HistoryQuery, diffMerges: boolean): string[] {
     const count = (q.follow ? q.skip : 0) + q.limit + 1;
     args.push(`--max-count=${count}`);
   }
-  args.push('HEAD', '--', q.relPath);
+  args.push(q.rev ?? 'HEAD', '--', q.relPath);
   return args;
+}
+
+/**
+ * Runs a `git log` built by `build`, asking for merges to be diffed against their
+ * first parent where git supports it (2.31+) and retrying without otherwise.
+ */
+export async function runLog(git: string, root: string, build: (diffMerges: boolean) => string[]): Promise<string> {
+  const supported = diffMergesSupport.get(git) ?? true;
+  try {
+    const output = await runGitText(git, build(supported), root);
+    diffMergesSupport.set(git, supported);
+    return output;
+  } catch (err) {
+    if (supported && err instanceof GitError && /diff-merges/.test(err.stderr)) {
+      diffMergesSupport.set(git, false);
+      return runGitText(git, build(false), root);
+    }
+    throw err;
+  }
 }
 
 /** Returns one page of the file's history, oldest commit first. */
 export async function getHistory(git: string, q: HistoryQuery): Promise<HistoryPage> {
   if (!(await hasHead(git, q.root))) return { stops: [], hasMore: false };
-  let output: string;
-  const supported = diffMergesSupport.get(git) ?? true;
-  try {
-    output = await runGitText(git, historyArgs(q, supported), q.root);
-    diffMergesSupport.set(git, supported);
-  } catch (err) {
-    // --diff-merges needs git 2.31+; retry without it on older versions.
-    if (supported && err instanceof GitError && /diff-merges/.test(err.stderr)) {
-      diffMergesSupport.set(git, false);
-      output = await runGitText(git, historyArgs(q, false), q.root);
-    } else {
-      throw err;
-    }
-  }
+  const output = await runLog(git, q.root, (diffMerges) => historyArgs(q, diffMerges));
   let commits = parseLog(output, q.relPath);
   if (q.follow) commits = commits.slice(q.skip);
   const hasMore = commits.length > q.limit;
@@ -277,13 +291,8 @@ export function parseLog(output: string, relPath: string): Stop[] {
     const headerEnd = record.indexOf('\0');
     const header = headerEnd >= 0 ? record.slice(0, headerEnd) : record;
     const rest = headerEnd >= 0 ? record.slice(headerEnd + 1) : '';
-    const fields = header.split(FIELD);
-    if (fields.length < 9) continue;
-    const [sha, parents, an, ae, at, cn, ct, decorations] = fields;
-    const message = fields.slice(8).join(FIELD).replace(/\s+$/, '');
-    const nl = message.indexOf('\n');
-    const subject = (nl >= 0 ? message.slice(0, nl) : message).trim();
-    const body = nl >= 0 ? message.slice(nl + 1).trim() : '';
+    const commit = parseCommitHeader(header);
+    if (!commit) continue;
 
     const raws: RawEntry[] = [];
     const nums: NumstatEntry[] = [];
@@ -334,21 +343,9 @@ export function parseLog(output: string, relPath: string): Stop[] {
     const noVisibleChange = !!raw && raw.status !== 'A' && !deleted && raw.srcOid === raw.dstOid;
 
     const stop: Stop = {
-      id: sha,
-      kind: 'commit',
-      sha,
-      shortSha: sha.slice(0, 7),
-      parents: parents ? parents.split(' ') : [],
+      ...commit,
       path: filePath,
       status: raw?.status,
-      subject: subject || '(no commit message)',
-      body: body || undefined,
-      authorName: an,
-      authorEmail: ae,
-      authorDate: Number(at) * 1000,
-      committerName: cn,
-      commitDate: Number(ct) * 1000,
-      refs: decorations ? decorations.split(', ').filter(Boolean) : undefined,
       added: num?.added,
       deleted: num?.deleted,
       binary: num?.binary || undefined,
@@ -363,6 +360,33 @@ export function parseLog(output: string, relPath: string): Stop[] {
     stops.push(stop);
   }
   return stops;
+}
+
+/** The commit fields of a stop, from one `LOG_FORMAT` header. Undefined when the header is malformed. */
+export function parseCommitHeader(header: string): Stop | undefined {
+  const fields = header.split(FIELD);
+  if (fields.length < 9) return undefined;
+  const [sha, parents, an, ae, at, cn, ct, decorations] = fields;
+  const message = fields.slice(8).join(FIELD).replace(/\s+$/, '');
+  const nl = message.indexOf('\n');
+  const subject = (nl >= 0 ? message.slice(0, nl) : message).trim();
+  const body = nl >= 0 ? message.slice(nl + 1).trim() : '';
+  return {
+    id: sha,
+    kind: 'commit',
+    sha,
+    shortSha: sha.slice(0, 7),
+    parents: parents ? parents.split(' ') : [],
+    path: '',
+    subject: subject || '(no commit message)',
+    body: body || undefined,
+    authorName: an,
+    authorEmail: ae,
+    authorDate: Number(at) * 1000,
+    committerName: cn,
+    commitDate: Number(ct) * 1000,
+    refs: decorations ? decorations.split(', ').filter(Boolean) : undefined,
+  };
 }
 
 /** Stops produced by `parseLog` may carry the blob id of the file at that commit. */
