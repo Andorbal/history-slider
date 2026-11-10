@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **Branch History Slider**: a slider over a whole branch, from where it was branched to its newest commit (and the working copy), showing every file that changed between the two handles. Run **History Slider: Show Branch History Slider**, use the branch button in the Source Control view, or press `Ctrl+Alt+Shift+H` (`⌃⇧⌘H` on macOS).
   - Go up the tree for stacked branches: start the slider from where the parent branch was branched instead, and back.
