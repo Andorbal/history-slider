@@ -44,7 +44,7 @@ The UI tests (`test/ui`) serve the built webview the way VS Code does: the page 
 npm install --prefix /tmp/cs code-server
 
 # Point an extensions directory at this checkout.
-mkdir -p /tmp/cs-ext && ln -sfn "$PWD" /tmp/cs-ext/AndrewBenz.history-slider-0.3.0
+mkdir -p /tmp/cs-ext && ln -sfn "$PWD" /tmp/cs-ext/AndrewBenz.history-slider-0.4.0
 
 npm run build
 /tmp/cs/node_modules/.bin/code-server --auth none --bind-addr 127.0.0.1:8123 \
@@ -81,8 +81,8 @@ The **Build** workflow (`.github/workflows/build.yml`) runs the typecheck, unit 
 To publish a release, bump the version (`npm version <x.y.z> --no-git-tag-version` updates `package.json` and `package-lock.json`), add a `CHANGELOG.md` entry, and once that is on `main`, push a matching tag:
 
 ```sh
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 Give every release its own version. VS Code keeps running an installed build until the window reloads, and installing another build of the same version replaces its files in place; the panel then asks for a reload. The Marketplace also refuses a version it already has.
